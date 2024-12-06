@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 IR Control</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+    }
+    #devices {
+      margin-bottom: 20px;
+    }
+    .device {
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>ESP32 IR Control</h1>
+  <div id="devices">
+    <h2>Devices</h2>
+    <ul id="device-list"></ul>
+    <form id="add-device-form">
+      <input type="text" id="device-id" placeholder="Device ID" required>
+      <input type="text" id="device-name" placeholder="Device Name" required>
+      <button type="submit">Add Device</button>
+    </form>
+  </div>
+  <div id="ir-codes">
+    <h2>UPLOADED IR Codes</h2>
+    <!-- <input type="text" id="action-name" placeholder="Actions Name" required> -->
+    <!-- <ul id="ir-action-list"></ul>
+    <form id="add-IRcode-form"> -->
+      <ul id="ir-code-list"></ul>
+    <!-- </form> -->
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const deviceList = document.getElementById('device-list');
+    const irCodeList = document.getElementById('ir-code-list');
+    const actionList = document.getElementById('ir-action-list');
+    const actionInput = document.getElementById('action-name');
+    const addIRcodeForm = document.getElementById('add-IRcode-form');
+    const addDeviceForm = document.getElementById('add-device-form');
+    const deviceIdInput = document.getElementById('device-id');
+    const deviceNameInput = document.getElementById('device-name');
+
+    // Fetch and display devices
+    function fetchDevices() {
+      fetch('/api/devices')
+        .then(response => response.json())
+        .then(data => {
+          deviceList.innerHTML = '';
+          for (const [id, name] of Object.entries(data.devices)) {
+            const li = document.createElement('li');
+            li.className = 'device';
+            li.textContent = `${name} (${id})`;
+            li.addEventListener('click', () => selectDevice(id, name));
+            deviceList.appendChild(li);
+          }
+        });
+    }
+
+    // Fetch and display IR codes for a specific device
+    function fetchIrCodes(deviceId) {
+      fetch(`/api/devices/${deviceId}/ir-codes`)
+        .then(response => response.json())
+        .then(data => {
+          irCodeList.innerHTML = '';
+          data.irCodes.forEach(code => {
+            const li = document.createElement('li');
+            li.textContent = code;
+            li.addEventListener('click', () => sendIrCode(deviceId, code));
+            irCodeList.appendChild(li);
+      
+          });
+        });
+    }
+
+    // Add a new device
+    addDeviceForm.addEventListener('submit', event => {
+      event.preventDefault();
+      const deviceId = deviceIdInput.value;
+      const deviceName = deviceNameInput.value;
+      fetch('/api/devices', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ deviceId, deviceName })
+      })
+        .then(response => response.json())
+        .then(() => {
+          fetchDevices();
+          deviceIdInput.value = '';
+          deviceNameInput.value = '';
+        });
+    });
+
+    // Select a device and fetch its IR codes
+    function selectDevice(deviceId, deviceName) {
+      fetchIrCodes(deviceId);
+    }
+
+    // Send an IR code to a specific device
+    function sendIrCode(deviceId, irCode) {
+      fetch(`/api/devices/${deviceId}/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ irCode })
+      });
+    }
+
+    // Listen for new IR codes
+    socket.on('new-ir-code', ({ deviceId, irCode}) => {
+      fetchIrCodes(deviceId);
+    });
+
+    // Initial fetch of devices
+    fetchDevices();
+  </script>
+</body>
+</html>
